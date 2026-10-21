@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 DOM selection 与 Obsidian 命令回调，接收高亮颜色与便签动作
- * [OUTPUT]: 对外提供 SelectionToolbar，在选中文本附近显示非侵入式阅读工具条
+ * [OUTPUT]: 对外提供 SelectionToolbar，在选中文本附近显示阅读工具条，并在点击按钮时保留表格 DOM 选区
  * [POS]: editor 模块的交互入口，被 main.ts 装配并调用
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -23,6 +23,7 @@ export class SelectionToolbar {
 
   constructor(private readonly options: SelectionToolbarOptions) {
     this.element = document.body.createDiv({ cls: "axl-toolbar axl-selection-toolbar" });
+    this.element.addEventListener("mousedown", (event) => event.preventDefault());
     this.render();
     this.hide();
     document.addEventListener("mouseup", this.handleMouseUp);

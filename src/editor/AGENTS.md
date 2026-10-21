@@ -2,6 +2,7 @@
 > L2 | 父级: /Users/epiphanyxiao/Documents/Playground/obsidian-annotation-plugin/src/AGENTS.md
 
 成员清单
+tableHighlights.ts: 实时预览表格 CSS Range 高亮、重绘恢复、多编辑器清理与点击命中，不修改表格 DOM。
 highlightExtension.ts: CodeMirror 6 Decoration 高亮层，只渲染视觉标记不修改文档。
 readingViewHighlight.ts: Reading View DOM 高亮层，兼容移动端延迟渲染与虚拟滚动补注入。
 selectionToolbar.ts: 浮动选择工具栏，提供颜色、便签、复制与总览入口。

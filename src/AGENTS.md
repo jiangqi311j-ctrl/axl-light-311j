@@ -4,6 +4,7 @@
 成员清单
 anchor/textAnchor.ts: 文本锚点生成与恢复，维护 offset、selectedText、prefix、suffix 与 isCode 的定位语义。
 anchor/fuzzyMatch.ts: 模糊匹配恢复器，处理文件轻微改动后的锚点迁移。
+editor/tableHighlights.ts: 实时预览表格 CSS Range 高亮、重绘恢复、多编辑器清理与点击命中，不修改表格 DOM。
 editor/highlightExtension.ts: CodeMirror 6 高亮装饰层，使用 Decoration.mark 非侵入式绘制。
 editor/readingViewHighlight.ts: Reading View DOM 高亮层，使用延迟渲染、MutationObserver 与 fuzzy matching 兼容移动端。
 editor/selectionToolbar.ts: 选中文本后的浮动工具栏，提供颜色、便签、复制和总览入口。

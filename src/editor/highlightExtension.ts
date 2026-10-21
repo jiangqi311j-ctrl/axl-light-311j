@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 CodeMirror Decoration API、obsidian editorInfoField、storage/types 的注释文档
  * [OUTPUT]: 对外提供 createHighlightExtension，在编辑器中渲染非侵入式高亮
- * [POS]: editor 模块的 CM6 高亮投影层，只画视觉效果不修改 doc
+ * [POS]: editor 模块的 CM6 高亮投影层，覆盖普通文本与实时预览表格，只画视觉效果不修改 doc
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 
@@ -10,6 +10,8 @@ import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate
 import { editorInfoField } from "obsidian";
 
 import { FileAnnotationDocument } from "../storage/types";
+
+import { TableHighlights } from "./tableHighlights";
 
 interface HighlightExtensionOptions {
   getDocument: (filePath: string) => FileAnnotationDocument | null;
@@ -22,11 +24,17 @@ export function createHighlightExtension(options: HighlightExtensionOptions) {
     class HighlightPlugin {
       decorations: DecorationSet;
       private version = -1;
+      private readonly tables: TableHighlights;
 
       constructor(private readonly view: EditorView) {
         this.decorations = this.buildDecorations();
         this.version = options.getVersion();
         this.captureSelection();
+        this.tables = new TableHighlights(view, () => {
+          const path = this.filePath();
+          const document = path ? options.getDocument(path) : null;
+          return document ? [...document.highlights, ...document.comments] : [];
+        });
       }
 
       update(update: ViewUpdate): void {
@@ -34,11 +42,16 @@ export function createHighlightExtension(options: HighlightExtensionOptions) {
         if (update.docChanged || update.viewportChanged || update.selectionSet || this.version !== nextVersion) {
           this.version = nextVersion;
           this.decorations = this.buildDecorations();
+          this.tables.schedule();
         }
 
         if (update.selectionSet) {
           this.captureSelection();
         }
+      }
+
+      destroy(): void {
+        this.tables.destroy();
       }
 
       private buildDecorations(): DecorationSet {

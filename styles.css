@@ -64,6 +64,14 @@
   color: inherit;
 }
 
+/* Live Preview tables own their DOM; paint ranges without inserting marks. */
+::highlight(axl-table-yellow) { background-color: rgba(245, 197, 24, 0.42); }
+::highlight(axl-table-orange) { background-color: rgba(255, 140, 0, 0.36); }
+::highlight(axl-table-pink) { background-color: rgba(255, 105, 180, 0.32); }
+::highlight(axl-table-green) { background-color: rgba(82, 196, 26, 0.30); }
+::highlight(axl-table-blue) { background-color: rgba(22, 119, 255, 0.28); }
+::highlight(axl-table-purple) { background-color: rgba(114, 46, 209, 0.30); }
+
 .axl-flash-target {
   animation: axl-flash 0.85s ease;
 }

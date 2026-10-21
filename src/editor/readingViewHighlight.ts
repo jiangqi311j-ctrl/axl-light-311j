@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Reading View 渲染 DOM、TextAnchor 数据与 fuzzyMatch 的容错定位能力
- * [OUTPUT]: 对外提供 installReadingViewHighlights，在非 CodeMirror 阅读模式中注入视觉高亮
+ * [OUTPUT]: 对外提供 installReadingViewHighlights，在阅读模式中注入视觉高亮，并提供渲染文本 Range 定位
  * [POS]: editor 模块的 Reading View 投影层，与 highlightExtension 分别覆盖 HTML DOM 与 CM6
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -170,6 +170,30 @@ function wrapRenderedAnchor(root: HTMLElement, anchor: TextAnchor, color: Annota
   }
 
   return wrapRange(snapshot.segments, range, color, id);
+}
+
+/** Locate text without modifying widget-owned DOM (for Live Preview tables). */
+export function findRenderedAnchorRanges(root: HTMLElement, anchor: TextAnchor, occurrence = 0): Range[] {
+  const snapshot = collectText(root);
+  let start = -1;
+  for (let index = 0; index <= occurrence; index += 1) {
+    start = snapshot.text.indexOf(anchor.selectedText, start + 1);
+    if (start < 0) {
+      return [];
+    }
+  }
+  const end = start + anchor.selectedText.length;
+  return snapshot.segments.flatMap((segment) => {
+    const from = Math.max(0, start - segment.start);
+    const to = Math.min(segment.node.length, end - segment.start);
+    if (from >= to) {
+      return [];
+    }
+    const range = root.ownerDocument.createRange();
+    range.setStart(segment.node, from);
+    range.setEnd(segment.node, to);
+    return [range];
+  });
 }
 
 function locateRenderedRange(renderedText: string, anchor: TextAnchor): RenderedRange | null {

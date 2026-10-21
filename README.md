@@ -7,6 +7,7 @@ Axl Light is a non-invasive Obsidian reading annotation plugin for Markdown and 
 ## Features
 
 - Overlay highlights for Markdown Live Preview, Source Mode, Reading View, and PDFs
+- Live Preview table highlights (including comment anchors), restored after cell redraws without modifying table DOM
 - Mobile-friendly Reading View highlight recovery with delayed rendering and DOM observation
 - Floating toolbar with six colors, sticky note, copy, and annotation overview actions
 - Right-side sticky note lane with Markdown-rendered notes
@@ -166,3 +167,16 @@ Copy `main.js`, `manifest.json`, and `styles.css` into:
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Development checks
+
+```bash
+npm ci
+npx tsc --noEmit
+npm run build
+npx playwright install chromium
+npm test
+```
+
+To use an installed Google Chrome for browser tests, run `CHROME_CHANNEL=chrome npm test`.
+Table regression tests cover repeated text, formatted cells, comments, redraws, colors, multiple editors, deletion, and Reading View. Live Preview table painting uses the CSS Custom Highlight API and requires an Obsidian webview that supports `CSS.highlights`.

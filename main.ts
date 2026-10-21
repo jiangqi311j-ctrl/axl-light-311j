@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Obsidian Plugin API、CM6 扩展、sidecar AnnotationStore、锚点算法、视图与设置模块
- * [OUTPUT]: 对外提供 OverlayAnnotationsPlugin 主类，注册跨平台选区、重命名迁移、剪贴板、侧栏与 vault 事件
+ * [OUTPUT]: 对外提供 OverlayAnnotationsPlugin 主类，注册跨平台选区、表格高亮交互、重命名迁移、侧栏与 vault 事件
  * [POS]: 插件装配根，协调模块但不修改用户 Markdown 原文
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -10,6 +10,7 @@ import { addIcon, Editor, MarkdownPostProcessorContext, MarkdownView, Notice, Pl
 import { createTextAnchor, relocateDocumentAnchors } from "./src/anchor/textAnchor";
 import { createHighlightExtension } from "./src/editor/highlightExtension";
 import { installReadingViewHighlights, refreshReadingViewHighlights } from "./src/editor/readingViewHighlight";
+import { tableHighlightAtPoint } from "./src/editor/tableHighlights";
 import { SelectionToolbar } from "./src/editor/selectionToolbar";
 import { PdfAnnotationLayer } from "./src/pdf/pdfAnnotationLayer";
 import { AnnotationSettingsTab } from "./src/settings/settingsTab";
@@ -358,8 +359,11 @@ export default class OverlayAnnotationsPlugin extends Plugin {
   }
 
   private async resolveSelection(): Promise<SelectionSnapshot | null> {
+    const domSelection = window.getSelection();
+    const domNode = domSelection?.anchorNode;
+    const inTable = Boolean(domSelection?.toString() && domNode?.parentElement?.closest("table"));
     const editor = this.activeEditor();
-    if (editor?.file && isMarkdownFile(editor.file)) {
+    if (!inTable && editor?.file && isMarkdownFile(editor.file)) {
       const selectedText = editor.editor.getSelection();
       if (selectedText) {
         const from = editor.editor.posToOffset(editor.editor.getCursor("from"));
@@ -438,14 +442,15 @@ export default class OverlayAnnotationsPlugin extends Plugin {
     }
 
     const mark = target.closest<HTMLElement>(".axl-highlight, .axl-reading-highlight");
-    if (!mark) {
+    const tableMark = mark ? null : tableHighlightAtPoint(event);
+    if (!mark && !tableMark) {
       if (!target.closest(".axl-annotation-popover")) {
         this.popover.hide();
       }
       return;
     }
 
-    const annotationId = mark.dataset.axlId;
+    const annotationId = mark?.dataset.axlId ?? tableMark?.id;
     const file = this.app.workspace.getActiveFile();
     if (!annotationId || !(file instanceof TFile)) {
       return;
@@ -456,7 +461,7 @@ export default class OverlayAnnotationsPlugin extends Plugin {
       document.comments.find((comment) => comment.id === annotationId) ??
       document.highlights.find((highlight) => highlight.id === annotationId);
     if (!primary) {
-      unwrapStaleHighlight(mark);
+      if (mark) unwrapStaleHighlight(mark);
       return;
     }
 
@@ -473,7 +478,7 @@ export default class OverlayAnnotationsPlugin extends Plugin {
     event.preventDefault();
     event.stopPropagation();
     this.popover.show({
-      rect: mark.getBoundingClientRect(),
+      rect: mark?.getBoundingClientRect() ?? tableMark!.rect,
       sourcePath: file.path,
       items,
     });
@@ -659,6 +664,7 @@ function selectionRoot(range: Range): HTMLElement | null {
     container?.closest<HTMLElement>(".markdown-preview-view") ??
     container?.closest<HTMLElement>(".markdown-preview-section") ??
     container?.closest<HTMLElement>(".mod-preview") ??
+    container?.closest<HTMLElement>(".cm-content") ??
     null
   );
 }
