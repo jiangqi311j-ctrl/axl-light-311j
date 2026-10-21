@@ -76,7 +76,17 @@ export class AnnotationStore {
 
   async addHighlight(file: TFile, highlight: HighlightAnnotation): Promise<FileAnnotationDocument> {
     const document = await this.getDocument(file);
-    document.highlights = [...document.highlights, highlight].sort(
+    const existing = document.highlights.find((item) =>
+      item.anchor.startOffset === highlight.anchor.startOffset &&
+      item.anchor.endOffset === highlight.anchor.endOffset &&
+      item.anchor.selectedText === highlight.anchor.selectedText,
+    );
+    const next = existing ? { ...highlight, id: existing.id, createdAt: existing.createdAt } : highlight;
+    document.highlights = [...document.highlights.filter((item) =>
+      item.anchor.startOffset !== highlight.anchor.startOffset ||
+      item.anchor.endOffset !== highlight.anchor.endOffset ||
+      item.anchor.selectedText !== highlight.anchor.selectedText,
+    ), next].sort(
       (a, b) => a.anchor.startOffset - b.anchor.startOffset,
     );
     document.lastModified = new Date().toISOString();

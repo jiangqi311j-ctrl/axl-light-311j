@@ -697,7 +697,9 @@ span.axl-ov-expand-btn:hover {
   z-index: 1001;
   display: none;
   max-height: min(420px, calc(100vh - 24px));
-  overflow: auto;
+  overflow: hidden;
+  flex-direction: column;
+  box-sizing: border-box;
   border: 1px solid var(--axl-border);
   border-radius: 12px;
   background: var(--background-primary);
@@ -705,10 +707,11 @@ span.axl-ov-expand-btn:hover {
 }
 
 .axl-annotation-popover.is-visible {
-  display: block;
+  display: flex;
 }
 
 .axl-popover-header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -722,6 +725,10 @@ span.axl-ov-expand-btn:hover {
 }
 
 .axl-popover-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -729,11 +736,15 @@ span.axl-ov-expand-btn:hover {
 }
 
 .axl-popover-card {
+  flex: 0 0 auto;
+  overflow-wrap: anywhere;
   border: 1px solid var(--axl-border);
   border-radius: var(--axl-radius);
   padding: 10px;
   background: var(--background-secondary);
 }
+
+.axl-popover-actions { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 
 .axl-popover-meta {
   display: flex;

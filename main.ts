@@ -10,7 +10,7 @@ import { addIcon, Editor, MarkdownPostProcessorContext, MarkdownView, Notice, Pl
 import { createTextAnchor, relocateDocumentAnchors } from "./src/anchor/textAnchor";
 import { createHighlightExtension } from "./src/editor/highlightExtension";
 import { installReadingViewHighlights, refreshReadingViewHighlights } from "./src/editor/readingViewHighlight";
-import { tableHighlightAtPoint } from "./src/editor/tableHighlights";
+import { refreshTableHighlights, tableHighlightAtPoint } from "./src/editor/tableHighlights";
 import { SelectionToolbar } from "./src/editor/selectionToolbar";
 import { PdfAnnotationLayer } from "./src/pdf/pdfAnnotationLayer";
 import { AnnotationSettingsTab } from "./src/settings/settingsTab";
@@ -73,7 +73,16 @@ export default class OverlayAnnotationsPlugin extends Plugin {
       onCopy: () => this.copySelection(),
       onOpenSidebar: () => this.activateSidebar(),
     });
-    this.popover = new AnnotationPopover({ app: this.app, component: this });
+    this.popover = new AnnotationPopover({
+      app: this.app,
+      component: this,
+      onDelete: async (sourcePath, id) => {
+        const file = this.app.vault.getAbstractFileByPath(sourcePath);
+        if (!(file instanceof TFile)) return;
+        await this.store.removeAnnotation(file, id);
+        await this.refreshAnnotations();
+      },
+    });
     this.pdfLayer = new PdfAnnotationLayer({
       app: this.app,
       component: this,
@@ -128,7 +137,14 @@ export default class OverlayAnnotationsPlugin extends Plugin {
   }
 
   async refreshAnnotations(): Promise<void> {
+    this.popover?.hide();
+    const paths = new Set<string>();
+    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+      if (leaf.view instanceof MarkdownView && leaf.view.file) paths.add(leaf.view.file.path);
+    }
+    for (const path of paths) await this.refreshActiveReadingViewHighlights(path);
     this.app.workspace.updateOptions();
+    refreshTableHighlights();
     for (const leaf of this.app.workspace.getLeavesOfType(ANNOTATION_SIDEBAR_VIEW)) {
       const view = leaf.view;
       if (view instanceof AnnotationSidebarView) {
@@ -264,7 +280,6 @@ export default class OverlayAnnotationsPlugin extends Plugin {
     };
 
     await this.store.addHighlight(file, highlight);
-    await this.refreshActiveReadingViewHighlights(file.path);
     await this.refreshAnnotations();
     this.toolbar.hide();
   }
@@ -317,7 +332,6 @@ export default class OverlayAnnotationsPlugin extends Plugin {
     };
 
     await this.store.addComment(file, comment);
-    await this.refreshActiveReadingViewHighlights(file.path);
     await this.refreshAnnotations();
     this.toolbar.hide();
   }
@@ -330,16 +344,15 @@ export default class OverlayAnnotationsPlugin extends Plugin {
 
     const document = this.store.getCachedDocument(filePath) ?? (await this.store.getDocument(file));
     const marks = [...document.highlights, ...document.comments].filter((item) => !item.orphaned);
-    if (!marks.length) {
-      return;
-    }
-
     for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
       const view = leaf.view;
       if (!(view instanceof MarkdownView) || view.file?.path !== filePath) {
         continue;
       }
 
+      for (const table of Array.from(view.containerEl.querySelectorAll<HTMLElement>(".markdown-source-view table"))) {
+        refreshReadingViewHighlights(table, []);
+      }
       const previewRoot = findPreviewRoot(view);
       if (previewRoot) {
         refreshReadingViewHighlights(previewRoot, marks);
@@ -496,9 +509,16 @@ export default class OverlayAnnotationsPlugin extends Plugin {
       return;
     }
 
-    const document = await this.store.getDocument(file);
-    const marks = [...document.highlights, ...document.comments].filter((item) => !item.orphaned);
-    installReadingViewHighlights({ root: element, context, marks });
+    await this.store.getDocument(file);
+    installReadingViewHighlights({
+      root: element,
+      context,
+      registerCleanup: (cleanup) => this.register(cleanup),
+      getMarks: () => {
+        const current = this.store.getCachedDocument(file.path);
+        return current ? [...current.highlights, ...current.comments] : [];
+      },
+    });
   }
 }
 

@@ -1,8 +1,9 @@
+import { AnnotationPopover } from "../src/views/annotationPopover";
 import { EditorState } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { TableHighlights, tableHighlightAtPoint } from "../src/editor/tableHighlights";
 import { createTextAnchor } from "../src/anchor/textAnchor";
-import { refreshReadingViewHighlights } from "../src/editor/readingViewHighlight";
+import { installReadingViewHighlights, refreshReadingViewHighlights } from "../src/editor/readingViewHighlight";
 import type { ReadingMark } from "../src/editor/readingViewHighlight";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -76,4 +77,63 @@ export async function run() {
   refreshReadingViewHighlights(preview, [{ id: "reading", color: "green", anchor }]);
   assert(preview.querySelectorAll("mark").length === 2, "reading view table highlights still work");
   return "Passed: table matching, repeated text, formatted cells, comment hit testing, redraw, colors, multiple editors, deletion, Reading View";
+}
+
+// Obsidian DOM convenience helpers used by the popover.
+function installDomHelpers() {
+  const proto = HTMLElement.prototype as any;
+  proto.empty = function() { this.replaceChildren(); };
+  proto.toggleClass = function(name: string, value: boolean) { this.classList.toggle(name, value); };
+  proto.createEl = function(tag: string, options: any = {}) {
+    const element = document.createElement(tag);
+    if (options.cls) element.className = options.cls;
+    if (options.text) element.textContent = options.text;
+    for (const [name, value] of Object.entries(options.attr ?? {})) element.setAttribute(name, String(value));
+    this.appendChild(element);
+    return element;
+  };
+  proto.createDiv = function(options: any) { return this.createEl("div", options); };
+  proto.createSpan = function(options: any) { return this.createEl("span", options); };
+}
+
+export async function runPopoverAndCache() {
+  installDomHelpers();
+  const root = document.body.appendChild(document.createElement("div"));
+  root.innerHTML = "<table><tr><td>Our tiered savings end October 25.</td></tr></table>";
+  const anchor = createTextAnchor(root.textContent!, 0, root.textContent!.length);
+  let current: ReadingMark[] = [{ id: "old", color: "purple", anchor }];
+  let child: any;
+  installReadingViewHighlights({ root, context: { addChild(value: any) { child = value; } } as any, getMarks: () => current });
+  await waitFor(() => Boolean(root.querySelector("mark")));
+  current = [];
+  refreshReadingViewHighlights(root, current);
+  root.appendChild(document.createTextNode(" redraw"));
+  await new Promise(resolve => setTimeout(resolve, 300));
+  assert(!root.querySelector("mark"), "deleted highlights never return via delayed timers or mutation observer");
+  current = [{ id: "new", color: "yellow", anchor }];
+  root.appendChild(document.createTextNode(" again"));
+  await waitFor(() => Boolean(root.querySelector('[data-axl-id="new"]')));
+  assert(!root.querySelector('[data-axl-id="old"]'), "re-marking uses only latest annotations");
+  child.unload(); root.remove();
+  const editor = document.body.appendChild(document.createElement("div"));
+  editor.className = "markdown-source-view";
+  editor.innerHTML = "<table><tr><td><mark class='axl-reading-highlight'>Our tiered savings end October 25.</mark></td></tr></table>";
+  refreshReadingViewHighlights(editor, current);
+  assert(!editor.querySelector("mark"), "legacy Live Preview wrappers cleared without reinsertion");
+  editor.remove();
+  const popover = new AnnotationPopover({ app: {} as any, component: {} as any, onDelete: async (_path, id) => {
+    assert(id === "popup-0", "delete action targets selected annotation");
+  } });
+  popover.show({ rect: new DOMRect(100, innerHeight - 40, 200, 30), sourcePath: "test.md", items: Array.from({length: 8}, (_, index) => ({
+    id: `popup-${index}`, kind: "highlight" as const, color: "purple" as const,
+    quote: "Our tiered savings end October 25. Choose the care that fits your hair and scalp needs. ".repeat(4),
+  })) });
+  const element = document.querySelector<HTMLElement>(".axl-annotation-popover")!;
+  const bounds = element.getBoundingClientRect();
+  assert(bounds.top >= 0 && bounds.bottom <= innerHeight, "long popup stays inside viewport");
+  const list = element.querySelector<HTMLElement>(".axl-popover-list")!;
+  assert(list.scrollHeight > list.clientHeight, "popup list has scrollable overflow");
+  assert(getComputedStyle(list).overflowY === "auto", "popup list enables scrolling");
+  assert(element.querySelector("button") && element.textContent!.includes("Delete highlight"), "highlight deletion available in popup");
+  return "Passed: deletion cache/timers, re-marking, editable table isolation, popup viewport bounds and scroll layout";
 }

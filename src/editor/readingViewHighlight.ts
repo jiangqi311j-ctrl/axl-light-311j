@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Reading View 渲染 DOM、TextAnchor 数据与 fuzzyMatch 的容错定位能力
- * [OUTPUT]: 对外提供 installReadingViewHighlights，在阅读模式中注入视觉高亮，并提供渲染文本 Range 定位
+ * [OUTPUT]: 对外提供 installReadingViewHighlights，使用最新 store 数据渲染阅读高亮，跳过编辑器表格，并提供 Range 定位
  * [POS]: editor 模块的 Reading View 投影层，与 highlightExtension 分别覆盖 HTML DOM 与 CM6
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -15,7 +15,8 @@ export type ReadingMark = Pick<HighlightAnnotation | CommentAnnotation, "id" | "
 interface InstallReadingHighlightsOptions {
   root: HTMLElement;
   context: MarkdownPostProcessorContext;
-  marks: ReadingMark[];
+  getMarks: () => ReadingMark[];
+  registerCleanup?: (cleanup: () => void) => void;
 }
 
 interface TextSegment {
@@ -54,7 +55,12 @@ export function installReadingViewHighlights(options: InstallReadingHighlightsOp
 
     frame = requestAnimationFrame(() => {
       frame = null;
-      refreshReadingViewHighlights(options.root, options.marks);
+      observer.disconnect();
+      try {
+        refreshReadingViewHighlights(options.root, options.getMarks());
+      } finally {
+        observer.observe(options.root, { childList: true, subtree: true, characterData: true });
+      }
     });
   };
 
@@ -64,13 +70,7 @@ export function installReadingViewHighlights(options: InstallReadingHighlightsOp
     component.register(() => window.clearTimeout(timer));
   }
 
-  const observer = new MutationObserver((mutations) => {
-    if (mutations.every(isOwnHighlightMutation)) {
-      return;
-    }
-
-    render();
-  });
+  const observer = new MutationObserver(() => render());
   observer.observe(options.root, { childList: true, subtree: true, characterData: true });
 
   component.register(() => {
@@ -81,10 +81,13 @@ export function installReadingViewHighlights(options: InstallReadingHighlightsOp
     observer.disconnect();
   });
   options.context.addChild(component);
+  options.registerCleanup?.(() => component.unload());
 }
 
 export function refreshReadingViewHighlights(root: HTMLElement, marks: ReadingMark[]): void {
   unwrapReadingHighlights(root);
+  // Live Preview tables are owned by CM widgets and painted by TableHighlights.
+  // Clear legacy DOM marks there, but never insert new wrappers in editable tables.
   renderReadingHighlights(root, marks);
   renderCalloutReadingHighlights(root, marks);
 }
@@ -159,7 +162,7 @@ function unwrapReadingHighlights(root: HTMLElement): void {
 }
 
 function wrapRenderedAnchor(root: HTMLElement, anchor: TextAnchor, color: AnnotationColor, id: string): boolean {
-  const snapshot = collectText(root);
+  const snapshot = collectText(root, true);
   if (!snapshot.text.trim()) {
     return false;
   }
@@ -272,13 +275,17 @@ function normalizeWithMap(value: string): NormalizedIndex {
   return { text: text.trim(), map };
 }
 
-function collectText(root: HTMLElement): { text: string; segments: TextSegment[] } {
+function collectText(root: HTMLElement, skipEditorTables = false): { text: string; segments: TextSegment[] } {
   const segments: TextSegment[] = [];
   let text = "";
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
       if (!parent) {
+        return NodeFilter.FILTER_REJECT;
+      }
+
+      if (skipEditorTables && parent.closest(".markdown-source-view table, .cm-content table")) {
         return NodeFilter.FILTER_REJECT;
       }
 
@@ -362,17 +369,6 @@ function highlightBackground(color: string): string {
   };
 
   return colors[color] ?? colors.yellow;
-}
-
-function isOwnHighlightMutation(mutation: MutationRecord): boolean {
-  const target = mutation.target;
-  if (target instanceof HTMLElement && target.closest(MARK_SELECTOR)) {
-    return true;
-  }
-
-  return Array.from(mutation.addedNodes).every((node) => {
-    return node instanceof HTMLElement && Boolean(node.closest(MARK_SELECTOR));
-  });
 }
 
 function cssEscape(value: string): string {

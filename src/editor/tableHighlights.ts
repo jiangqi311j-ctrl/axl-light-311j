@@ -110,3 +110,8 @@ export function tableHighlightAtPoint(event: MouseEvent): { id: string; rect: DO
   }
   return null;
 }
+
+/** Refresh on sidecar changes even when CM has no document/selection update. */
+export function refreshTableHighlights(): void {
+  for (const owner of owners.keys()) owner.schedule();
+}

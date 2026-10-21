@@ -11,7 +11,7 @@ editor/selectionToolbar.ts: 选中文本后的浮动工具栏，提供颜色、�
 pdf/pdfAnnotationLayer.ts: PDF 注释控制器，使用页码与矩形百分比坐标绘制非侵入式高亮和右侧便签栏。
 storage/types.ts: sidecar JSON、设置、锚点、高亮、便签、代码选区标记、索引的类型真相源。
 storage/annotationStore.ts: .obsidian-annotations 持久化后端，读写文件 JSON 与全局 index。
-views/annotationPopover.ts: 窄屏与阅读模式弹层，点击高亮后展示 sidecar 中的高亮和便签内容。
+views/annotationPopover.ts: 窄屏与阅读模式弹层，点击高亮后展示可滚动内容、删除操作与视口内弹窗定位。
 views/commentModal.ts: 便签输入弹窗，统一 Markdown/PDF 创建便签时的标题和内容采集。
 views/sidebarView.ts: 右侧总览面板，使用彩色卡片合并 highlight 与关联 note，并承载搜索、过滤、排序、导出、跳转与内联编辑。
 views/stickyNoteView.ts: 兼容型便利贴卡片组件，保留 Markdown 渲染、折叠与编辑。

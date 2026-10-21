@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Obsidian MarkdownRenderer、注释/高亮数据与目标 DOM 坐标
- * [OUTPUT]: 对外提供 AnnotationPopover，在窄屏或阅读模式点击高亮时显示便签内容
+ * [OUTPUT]: 对外提供 AnnotationPopover，显示可滚动的便签内容与删除操作，并按视口高度定位
  * [POS]: views 模块的轻量弹层，补足 sticky lane collapse 后的阅读入口
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -12,6 +12,7 @@ import { AnnotationColor, CommentAnnotation, HighlightAnnotation } from "../stor
 interface AnnotationPopoverOptions {
   app: App;
   component: Component;
+  onDelete: (sourcePath: string, annotationId: string) => Promise<void>;
 }
 
 interface AnnotationPopoverItem {
@@ -96,6 +97,21 @@ export class AnnotationPopover {
     meta.createSpan({ text: item.kind === "comment" ? item.author ?? "Reader" : "highlight only" });
 
     card.createDiv({ cls: "axl-popover-quote", text: item.quote });
+    const actions = card.createDiv({ cls: "axl-popover-actions" });
+    const remove = actions.createEl("button", {
+      text: item.kind === "highlight" ? "Delete highlight" : "Delete note",
+      attr: { type: "button" },
+    });
+    remove.addEventListener("click", async () => {
+      remove.disabled = true;
+      try {
+        await this.options.onDelete(sourcePath, item.id);
+        this.hide();
+      } catch (error) {
+        remove.disabled = false;
+        console.error("Axl Light: unable to delete annotation", error);
+      }
+    });
     if (!item.content) {
       card.createDiv({ cls: "axl-popover-empty", text: "No sticky note attached yet." });
       return;
@@ -106,12 +122,15 @@ export class AnnotationPopover {
   }
 
   private place(rect: DOMRect): void {
-    const width = Math.min(320, window.innerWidth - 24);
-    const left = clamp(rect.left + rect.width / 2 - width / 2, 12, window.innerWidth - width - 12);
-    const below = rect.bottom + 10;
-    const top = below + 220 > window.innerHeight ? Math.max(12, rect.top - 230) : below;
-
+    const win = this.element.ownerDocument.defaultView!;
+    const width = Math.min(360, win.innerWidth - 24);
     this.element.style.width = `${width}px`;
+    this.element.style.maxHeight = `${Math.min(420, win.innerHeight - 24)}px`;
+    const height = this.element.getBoundingClientRect().height;
+    const left = clamp(rect.left + rect.width / 2 - width / 2, 12, win.innerWidth - width - 12);
+    const below = rect.bottom + 10;
+    const preferredTop = below + height <= win.innerHeight - 12 ? below : rect.top - height - 10;
+    const top = clamp(preferredTop, 12, Math.max(12, win.innerHeight - height - 12));
     this.element.style.left = `${left}px`;
     this.element.style.top = `${top}px`;
   }
